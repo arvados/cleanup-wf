@@ -8,6 +8,8 @@ requirements:
   DockerRequirement:
     dockerPull: arvados/jobs:2.7.0
   arv:APIRequirement: {}
+  WorkReuse:
+    enableReuse: false
 
 inputs:
   script:
