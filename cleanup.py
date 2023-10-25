@@ -1,7 +1,10 @@
 import datetime
+import time
+import concurrent.futures
+import threading
+
 import arvados
 import arvados.util
-import time
 
 arv_client = arvados.api()
 
@@ -25,7 +28,30 @@ before = datetime.datetime.utcnow() - datetime.timedelta(days=7)
 
 before_timestamp = before.isoformat("T") + 'Z'
 
-count = 0
+executor = concurrent.futures.ThreadPoolExecutor(4)
+
+class AtomicCounter:
+    def __init__(self, initial=0):
+        """Initialize a new atomic counter to given initial value (default 0)."""
+        self.value = initial
+        self._lock = threading.Lock()
+
+    def increment(self, num=1):
+        """Atomically increment the counter by num (default 1) and return the
+        new value.
+        """
+        with self._lock:
+            self.value += num
+            return self.value
+
+count = AtomicCounter()
+
+def delete_item(uuid):
+    arv_client.collections().delete(uuid=uuid).execute()
+    v = count.increment(1)
+    if v % 100 == 0:
+        print(v)
+
 skip = 0
 start = time.time()
 print("start")
@@ -38,14 +64,10 @@ for col in arvados.util.keyset_list_all(
         ],
         select=["uuid", "properties"]):
 
-    count += 1
-    if count % 100 == 0:
-        print(count, "period", time.time() - start, "seconds")
-        start = time.time()
-
     if col["properties"]["container_request"] not in protected_requests:
-        arv_client.collections().delete(uuid=col["uuid"]).execute()
+        executor.submit(delete_item, col["uuid"])
     else:
         skip += 1
 
+executor.shutdown()
 print("count", count, "skip", skip)
