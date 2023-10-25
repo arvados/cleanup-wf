@@ -70,4 +70,4 @@ for col in arvados.util.keyset_list_all(
         skip += 1
 
 executor.shutdown()
-print("count", count, "skip", skip)
+print("count", count.value, "skip", skip)
