@@ -44,17 +44,23 @@ class AtomicCounter:
             self.value += num
             return self.value
 
+# For reporting progress
 count = AtomicCounter()
+
+# So we don't have too many futures in flight at once,
+# which eventually will consume RAM
+limiter = threading.Semaphore(1001)
 
 def delete_item(uuid):
     arv_client.collections().delete(uuid=uuid).execute()
     v = count.increment(1)
-    if v % 100 == 0:
-        print(v)
+    if v % 1000 == 0:
+        print(v, flush=True)
+    limiter.release()
 
 skip = 0
 start = time.time()
-print("start")
+print("start", flush=True)
 for col in arvados.util.keyset_list_all(
         arv_client.collections().list,
         filters=[
@@ -65,6 +71,7 @@ for col in arvados.util.keyset_list_all(
         select=["uuid", "properties"]):
 
     if col["properties"]["container_request"] not in protected_requests:
+        limiter.acquire()
         executor.submit(delete_item, col["uuid"])
     else:
         skip += 1
